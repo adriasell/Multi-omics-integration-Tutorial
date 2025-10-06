@@ -8,6 +8,13 @@ The multi-omics approach aims to integrate diverse layers of biological informat
 
 There are many multi-omics integration algorithms, each suited for different analytical goals, and they can be classified according to whether they are supervised or unsupervised and whether they perform variable selection—in this session, we will focus on the **RGCCA** (Regularized Generalized Canonical Correlation Analysis) approach.
 
+The objective of this session to offer an introduction to a multi-omics integration analysis using **RGCCA**. We will:
+* Load data
+* Preprocessing of the data
+* Multi-omic integration
+* Evaluate the algorithm’s performance
+By the end, you’ll have a hands-on understanding of how RGCCA works and how to apply it to multi-omics data.
+
 For this practical tutorial, we will use data from the HELIX exposome study. The HELIX study is a collaborative project between six longitudinal, population-based birth cohort studies from six European countries (France, Greece, Lithuania, Norway, Spain and the UK).
 
 <img width="1024" height="212" alt="HELIX" src="https://github.com/user-attachments/assets/090ed53b-dda4-4383-9b9a-0966efc3f90d" />
@@ -28,25 +35,16 @@ The repository contains the following documents:
     * `codebook`
 
 # Reminder: Introduction to NoteBook
-This tutorial (multiomics_integration_tutorial.ipynb file) is a NoteBook object. Within this notebook (NoteBook), you will be guided step by step from loading a dataset to performing analysis of its content.
+This notebook will guide you step by step, from loading a dataset to analyzing it.
 
-To access the tutorial:
+Getting Started:
+* Open multiomics_integration_tutorial.ipynb and click “Open in Colab” (sign in with your Google account if needed).
+* Select “Open in draft mode” at the top left so you can run the code safely.
+* If you see "Warning: This notebook was not created by Google.", don’t worry—just click Run anyway.
 
-* Open the multiomics_integration_tutorial.ipynb file.
-* Click the “Open in Colab” button at the top of the notebook.
-
-You’ll need to sign in with a Google account to run the Colab tutorial.
-
-The Jupyter (Python) notebook is an approach that combines text blocks (like this one) together with code blocks or cells. The great advantage of this type of cell is its interactivity, as they can be executed to check the results directly within them. Very important: the order of instructions is fundamental, so each cell in this notebook must be executed sequentially. If any are omitted, the program may throw an error, so you should start from the beginning if in doubt.
-
-First of all:
-
-Once inside google colab, it is very very important that at the start you select "Open in draft mode" (draft mode), at the top left. Otherwise, it will not allow you to execute any code block, for security reasons. When the first of the blocks is executed, the following message will appear: "Warning: This notebook was not created by Google.". Do not worry, you should trust the content of the notebook (NoteBook) and click "Run anyway".
-
-Let’s go!
-
-Click the "play" button on the left side of each code cell. Lines of code that begin with a hashtag (#) are comments and do not affect the execution of the program.
-
-You can also click on each cell and press "ctrl+enter" (cmd+enter on Mac).
-
-Each time you run a block, you will see the output just below it. The information is usually always related to the last instruction, along with all the print() commands in the code.
+How to Use the Notebook:
+* The notebook mixes text explanations and code cells for hands-on learning.
+* Always run cells in order to avoid errors.
+* Click the play button next to a cell, or press Ctrl+Enter (Cmd+Enter on Mac).
+* Lines starting with # are comments for guidance, they won’t affect the code.
+* Outputs appear below each cell, showing results and any printed messages.
