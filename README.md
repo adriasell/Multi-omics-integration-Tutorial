@@ -13,7 +13,8 @@ The objective of this session to offer an introduction to a multi-omics integrat
 * Preprocessing of the data
 * Multi-omic integration
 * Evaluate the algorithm’s performance
-By the end, you’ll have a hands-on understanding of how RGCCA works and how to apply it to multi-omics data.
+
+By the end of the session, you’ll have a hands-on understanding of how RGCCA works and how to apply it to multi-omics data.
 
 For this practical tutorial, we will use data from the HELIX exposome study. The HELIX study is a collaborative project between six longitudinal, population-based birth cohort studies from six European countries (France, Greece, Lithuania, Norway, Spain and the UK).
 
