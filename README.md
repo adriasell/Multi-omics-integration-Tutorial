@@ -1,12 +1,12 @@
 # Multi-omics integration tutorial
 
-Adrià Setó Llorens, Predoctoral Researcher at the Barcelona Institute for Global Health (ISGlobal).
+**Adrià Setó Llorens**, Predoctoral Researcher at the Barcelona Institute for Global Health (ISGlobal).
 
-Augusto Anguita-Ruiz, Junior Leader Researcher at the Barcelona Institute for Global Health (ISGlobal).
+**Augusto Anguita-Ruiz**, Junior Leader Researcher at the Barcelona Institute for Global Health (ISGlobal).
 
 The multi-omics approach aims to integrate diverse layers of biological information—such as genomics, transcriptomics, proteomics, metabolomics, and epigenomics—to achieve a more comprehensive understanding of biological systems and disease mechanisms. Each omic layer captures a distinct yet interconnected level of cellular regulation, and their integration enables the identification of molecular interactions that cannot be detected through single-omic analyses alone. The main advantage of multi-omics integration over traditional single-omic studies lies in its ability to uncover cross-level biological relationships and multi-factorial drivers of phenotypes, improving prediction accuracy and mechanistic insight. This systems-level perspective supports the discovery of key biomarkers, regulatory networks, and potential therapeutic targets.
 
-There are many multi-omics integration algorithms, each suited for different analytical goals, and they can be classified according to whether they are supervised or unsupervised and whether they perform variable selection—in this session, we will focus on the RGCCA (Regularized Generalized Canonical Correlation Analysis) approach.
+There are many multi-omics integration algorithms, each suited for different analytical goals, and they can be classified according to whether they are supervised or unsupervised and whether they perform variable selection—in this session, we will focus on the **RGCCA** (Regularized Generalized Canonical Correlation Analysis) approach.
 
 For this practical tutorial, we will use data from the HELIX exposome study. The HELIX study is a collaborative project between six longitudinal, population-based birth cohort studies from six European countries (France, Greece, Lithuania, Norway, Spain and the UK).
 
@@ -15,6 +15,17 @@ For this practical tutorial, we will use data from the HELIX exposome study. The
 Note: The data provided in this introductory course were simulated from the HELIX sub-cohort data. Details of the HELIX project and the origin of the data collected can be found in the following publication: BMJ Open - HELIX and on the project website. Additional details about the dataset can be found in the official repository at "https://github.com/isglobal-exposomeHub/ExposomeDataChallenge2021".
 
 # Repository guide
+The repository contains the following documents:
+
+* The multiomics_integration_tutorial.ipynb. It contains the notebook for the practical tutorial with the code needed to perform the multi-omic integration using RGCCA.
+
+**data**: This folder contains the codebook and the datasets that will be used during the session.
+
+* The **exposoma data (n = 1301)** that we will use are contained in a **Rdata** file, which includes the following files:
+    * `phenotype` (results)
+    * `exposome` (exposome)
+    * `covariates` (covariates)
+    * `codebook`
 
 # Reminder: Introduction to NoteBook
 This tutorial (multiomics_integration_tutorial.ipynb file) is a NoteBook object. Within this notebook (NoteBook), you will be guided step by step from loading a dataset to performing analysis of its content.
