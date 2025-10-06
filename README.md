@@ -1,7 +1,5 @@
 # Multi-omics integration tutorial
 
-<img width="1419" height="442" alt="2_ATHLETE_logo_subtitle_color" src="https://github.com/user-attachments/assets/b7a1faeb-1263-41e8-a5bb-060e913c28d2" />
-
 **Adrià Setó Llorens**, Predoctoral Researcher at the Barcelona Institute for Global Health (ISGlobal).
 
 **Augusto Anguita-Ruiz**, Junior Leader Researcher at the Barcelona Institute for Global Health (ISGlobal).
@@ -21,7 +19,7 @@ By the end of the session, you’ll have a hands-on understanding of how RGCCA w
 
 For this practical tutorial, we will use data from the HELIX exposome study. The HELIX study is a collaborative project between six longitudinal, population-based birth cohort studies from six European countries (France, Greece, Lithuania, Norway, Spain and the UK).
 
-<img width="1024" height="212" alt="HELIX" src="https://github.com/user-attachments/assets/090ed53b-dda4-4383-9b9a-0966efc3f90d" />
+<img width="800" height="150" alt="HELIX" src="https://github.com/user-attachments/assets/090ed53b-dda4-4383-9b9a-0966efc3f90d" />
 
 Note: The data provided in this introductory course were simulated from the HELIX sub-cohort data. Details of the HELIX project and the origin of the data collected can be found in the following publication: BMJ Open - HELIX and on the project website. Additional details about the dataset can be found in the official repository at https://github.com/isglobal-exposomeHub/ExposomeDataChallenge2021.
 
