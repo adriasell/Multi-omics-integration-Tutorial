@@ -15,7 +15,7 @@ The objective of this session to offer an introduction to a multi-omics integrat
 * Understand the results of multi-omics integration
 * Evaluate the algorithm’s performance
 
-By the end of the session, you’ll have a hands-on understanding of how RGCCA works and how to apply it to multi-omics data.
+We will integrate multi-omics data — including proteomics, urine and serum metabolomics, gene expression, and DNA methylation — using Regularized Generalized Canonical Correlation Analysis (RGCCA). The outcome variable will be standardized body mass index (zBMI) at 9 years old. The objective of this analysis is to identify multi-omic signatures predictive of BMI in later childhood while gaining a hands-on understanding of the application of RGCCA to multi-omics data integration.
 
 For this practical tutorial, we will use data from the HELIX exposome study. The HELIX study is a collaborative project between six longitudinal, population-based birth cohort studies from six European countries (France, Greece, Lithuania, Norway, Spain and the UK).
 
