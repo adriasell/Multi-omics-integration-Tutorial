@@ -103,3 +103,92 @@ forest_plot= function(results, color){
   return(p)
 }
 
+
+#Cross validation function
+cross_validation_single_outcome <- function(X_test, response, rgcca_res, Nfold = 5, n_run = 10) {
+  
+  # Function to run one repetition of cross-validation
+  cross_val_run <- function(rep) {
+    id_cv <- sample(1:Nfold, nrow(X_test[[1]]), replace = TRUE)
+    
+    quality_cv_list <- list()  # store results for each fold
+    
+    for (i in 1:Nfold) {
+      # Prepare test blocks
+      X_test_i <- lapply(X_test, function(block) block[id_cv == i, , drop = FALSE])
+      
+      # RGCCA prediction
+      pred_quality <- rgcca_predict(rgcca_res, blocks_test = X_test_i, prediction_model = "lm")
+      
+      # Combine latent variables from projection
+      latent_variables_test <- purrr::reduce(pred_quality$projection, cbind)
+
+      # Get number of components per block
+      n_components_per_block <- rgcca_res$call$ncomp
+      
+      # Remove the response block using its position
+      n_components_per_block <- n_components_per_block[-response]
+      
+      # Assign column names for latent variables
+      all_names <- unlist(
+        mapply(function(block, n) paste0(block, "_Comp", seq_len(n)),
+               names(n_components_per_block), n_components_per_block)
+      )
+      
+      # Only assign as many names as there are columns
+      colnames(latent_variables_test) <- all_names[1:ncol(latent_variables_test)]
+      
+      
+      # Correlation with outcome
+      cor_values <- cor(latent_variables_test, X_test_i[[response]])[,1]
+      
+      # Combine latent variables and outcome
+      data_r2 <- cbind(latent_variables_test, X_test_i[[response]]) %>% as.data.frame()
+      
+      # Get actual outcome column name
+      outcome_name <- colnames(X_test_i[[response]])
+      
+      # Compute R2 for each latent variable
+      r2_values <- sapply(colnames(latent_variables_test), function(comp) {
+        summary(lm(as.formula(paste0(outcome_name, " ~ ", comp)), data = data_r2))$r.squared
+      })
+      
+      # Combine R2 and correlation
+      fold_result <- c(r2_values, cor_values)
+      names(fold_result) <- c(paste0("R2_", colnames(latent_variables_test)), paste0("cor_", colnames(latent_variables_test)))
+      
+      quality_cv_list[[i]] <- fold_result
+    }
+    
+    # Combine folds into a matrix
+    do.call(rbind, quality_cv_list)
+  }
+  
+  # Run multiple repetitions
+  res <- lapply(1:n_run, cross_val_run)
+  res_combined <- do.call(rbind, res)
+  
+  # Convert to long format for plotting
+  res_long <- res_combined %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column("Fold") %>%
+    tidyr::pivot_longer(cols = -Fold, names_to = "Indicator", values_to = "value") %>%
+    mutate(group = ifelse(grepl("cor_", Indicator), "Correlation with outcome", "R2 of components"))
+  
+  # Compute medians for labels
+  medians <- res_long %>%
+    group_by(Indicator, group) %>%
+    summarise(md = median(value), .groups = "drop") %>%
+    mutate(md = round(md, 3))
+  
+  # Plot
+  final_plot <- ggplot(res_long, aes(x = Indicator, y = value)) +
+    geom_boxplot() +
+    ggforce::facet_row(vars(group), scales = 'free', space = 'free') +
+    ggrepel::geom_text_repel(data = medians, aes(x = Indicator, y = abs(md), label = abs(md)), direction = "y") +
+    xlab("Cross-validation folds") +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+  
+  return(list(plot = final_plot, median_quality = medians, quality_all = res_long))
+}
