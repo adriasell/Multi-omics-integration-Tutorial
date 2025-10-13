@@ -16,12 +16,14 @@ bootstrap_figure <- function(bootstrap,
   # Not stratified
   if (is.null(stratified_by)){
     data_bootstrap <- bootstrap %>%
-      rename(variable=var,
-             beta = estimate,
-             `CI 2.5`=lower_bound,
-             `CI 97.5` = upper_bound) %>%
-      filter(block == defined_block & comp==defined_comp & type == defined_type)%>%
-      mutate(variable = fct_reorder(variable, abs(beta)))
+    dplyr::rename(
+      variable = .data$var,
+      beta = .data$estimate,
+      `CI 2.5` = .data$lower_bound,
+      `CI 97.5` = .data$upper_bound
+    ) %>%
+    dplyr::filter(block == defined_block & comp == defined_comp & type == defined_type) %>%
+    dplyr::mutate(variable = forcats::fct_reorder(variable, abs(beta)))
     
     
     boostrap_plot <- forest_plot(data_bootstrap, color = color)
@@ -122,22 +124,7 @@ cross_validation_single_outcome <- function(X_test, response, rgcca_res, Nfold =
       
       # Combine latent variables from projection
       latent_variables_test <- purrr::reduce(pred_quality$projection, cbind)
-
-      # Get number of components per block
-      n_components_per_block <- rgcca_res$call$ncomp
-      
-      # Remove the response block using its position
-      n_components_per_block <- n_components_per_block[-response]
-      
-      # Assign column names for latent variables
-      all_names <- unlist(
-        mapply(function(block, n) paste0(block, "_Comp", seq_len(n)),
-               names(n_components_per_block), n_components_per_block)
-      )
-      
-      # Only assign as many names as there are columns
-      colnames(latent_variables_test) <- all_names[1:ncol(latent_variables_test)]
-      
+      colnames(latent_variables_test) <- paste0("Comp", seq_len(ncol(latent_variables_test)))
       
       # Correlation with outcome
       cor_values <- cor(latent_variables_test, X_test_i[[response]])[,1]
@@ -155,7 +142,7 @@ cross_validation_single_outcome <- function(X_test, response, rgcca_res, Nfold =
       
       # Combine R2 and correlation
       fold_result <- c(r2_values, cor_values)
-        names(fold_result) <- c(paste0("R2_", colnames(latent_variables_test)), paste0("cor_", colnames(latent_variables_test)))
+      names(fold_result) <- c(paste0("R2_", colnames(latent_variables_test)), paste0("cor_", colnames(latent_variables_test)))
       
       quality_cv_list[[i]] <- fold_result
     }
@@ -168,38 +155,27 @@ cross_validation_single_outcome <- function(X_test, response, rgcca_res, Nfold =
   res <- lapply(1:n_run, cross_val_run)
   res_combined <- do.call(rbind, res)
   
-  # Convert to long format for plotting and extract blocks/components in one step
-  res_long_r2 <- res_combined %>%
+  # Convert to long format for plotting
+  res_long <- res_combined %>%
     as.data.frame() %>%
     tibble::rownames_to_column("Fold") %>%
     tidyr::pivot_longer(cols = -Fold, names_to = "Indicator", values_to = "value") %>%
-    filter(!grepl("cor_", Indicator)) %>%                       # Keep only R2
-    mutate(
-      value = value * 100,                                     # convert to %
-      Component = str_remove(Indicator, "^R2_"),               # remove "R2_" prefix
-      Block = str_extract(Component, "^[^_]+")                 # extract block name
-    )
+    mutate(group = ifelse(grepl("cor_", Indicator), "Correlation with outcome", "R2 of components"))
   
   # Compute medians for labels
-  medians_r2 <- res_long_r2 %>%
-    group_by(Component, Block) %>%
+  medians <- res_long %>%
+    group_by(Indicator, group) %>%
     summarise(md = median(value), .groups = "drop") %>%
-    mutate(md = round(md, 2))
+    mutate(md = round(md, 3))
   
   # Plot
-  final_plot <- ggplot(res_long_r2, aes(x = Component, y = value)) +
+  final_plot <- ggplot(res_long, aes(x = Indicator, y = value)) +
     geom_boxplot() +
-    ggrepel::geom_text_repel(
-      data = medians_r2,
-      aes(x = Component, y = md, label = md),
-      direction = "y"
-    ) +
-    scale_y_continuous(name = "R2 (%)") +
-    xlab("Component") +
+    ggforce::facet_row(vars(group), scales = 'free', space = 'free') +
+    ggrepel::geom_text_repel(data = medians, aes(x = Indicator, y = abs(md), label = abs(md)), direction = "y") +
+    xlab("Cross-validation folds") +
     theme_bw() +
-    theme(
-      axis.text.x = element_text(angle = 45, hjust = 1),
-      legend.position = "none"
-    )
-  return(list(plot = final_plot, median_quality = medians_r2, quality_all = res_long_r2))
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+  
+  return(list(plot = final_plot, median_quality = medians, quality_all = res_long))
 }
