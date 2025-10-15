@@ -27,6 +27,7 @@ Note: The data provided in this introductory course were simulated from the HELI
 The repository contains the following documents:
 
 * The multiomics_integration_tutorial.ipynb. It contains the notebook for the practical tutorial with the code needed to perform the multi-omic integration using RGCCA.
+* The multiomics_integration_tutorial.Rmd file contains the R Markdown tutorial and all the code needed to perform multi-omic integration using RGCCA locally.
 * Functions: This directory contains all the functions used in this session. These functions are stored in separate files to keep the notebook clean and easy to follow. For more details, you can consult the files in this directory.
 
 This is the dataset we will use:
