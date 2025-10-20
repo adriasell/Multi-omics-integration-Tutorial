@@ -1,0 +1,765 @@
+---
+title: "Multi-omics integration tutorial"
+lang: es
+toc-title: "Table of Contents"
+urlcolor: blue
+output: 
+  html_document:
+    toc: yes # index
+    toc_float: true # floating index
+    toc_depth: 2 # sub-sections
+    number_sections: false # number of section
+    theme: cerulean # blue theme
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+**Adrià Setó Llorens**, Predoctoral Researcher at the Barcelona Institute for Global Health (ISGlobal).
+
+**Augusto Anguita-Ruiz**, Junior Leader Researcher at the Barcelona Institute for Global Health (ISGlobal).
+
+The multi-omics approach aims to integrate diverse layers of biological information—such as genomics, transcriptomics, proteomics, metabolomics, and epigenomics—to achieve a more comprehensive understanding of biological systems and disease mechanisms. Each omic layer captures a distinct yet interconnected level of cellular regulation, and their integration enables the identification of molecular interactions that cannot be detected through single-omic analyses alone. The main advantage of multi-omics integration over traditional single-omic studies lies in its ability to uncover cross-level biological relationships and multi-factorial drivers of phenotypes, improving prediction accuracy and mechanistic insight. This systems-level perspective supports the discovery of key biomarkers, regulatory networks, and potential therapeutic targets.
+
+There are many multi-omics integration algorithms, each suited for different analytical goals, and they can be classified according to whether they are supervised or unsupervised and whether they perform variable selection—in this session, we will focus on the **RGCCA** (Regularized Generalized Canonical Correlation Analysis) approach.
+
+The objective of this session to offer an introduction to a multi-omics integration analysis using **RGCCA**. We will:
+
+-   Load the data
+
+-   Preprocess the data
+
+-   Perform multi-omics integration
+
+-   Understand the results of multi-omics integration
+
+-   Evaluate the algorithm’s performance
+
+We will integrate multi-omics data — including proteomics, gene expression, and DNA methylation — using Regularized Generalized Canonical Correlation Analysis (RGCCA). The outcome variable will be standardized body mass index (zBMI) at 9 years old. The objective of this analysis is to identify multi-omic signatures predictive of BMI in later childhood while gaining a hands-on understanding of the application of RGCCA to multi-omics data integration.
+
+# 1. Installation of the R Environment and Libraries for multi-omics integration
+
+Below, we install/load the libraries necessary for this session. In the context of multi-omics integration, R and Bioconductor libraries offer us a much more convenient way to process, manipulate, and analyze the data.
+
+Bioconductor is an open-source software platform built on R for analyzing and interpreting genomic and other ‘omics’ data. Its packages provide specialized tools for tasks such as data processing, normalization, statistical analysis, and biological data visualization.
+
+The installation of R in our Google Colab environment will be carried out in the following code block. It should be remembered that all library installations we perform in the Google Colab environment will only remain active for a few hours, after which the installed libraries are removed. Therefore, it will be necessary for you to re-run the library installation code in this section whenever you need to run the notebook again after this time.
+
+**Note:** We recommend installing the libraries and downloading the data **1h** before the start of the session❗❗❗
+
+**Install/load libraries for the session**
+
+```{r}
+
+# Define CRAN packages
+cran_packages <- c(
+  "BiocManager", "doParallel", "data.table", "readxl", "networkD3", "knitr", "ggforce",
+  "dplyr", "ggplot2", "corrplot", "fastDummies", "polycor", "tidyverse", "gridExtra",
+  "RGCCA", "parallel", "writexl", "RCurl", "doSNOW", "DescTools", "limma", "webshot", "htmlwidgets"
+)
+
+# Define Bioconductor packages
+bioc_packages <- c("lumi", "minfi", "Biobase", "clusterProfiler", "org.Hs.eg.db", "IlluminaHumanMethylation450kanno.ilmn12.hg19", "enrichplot")
+
+# --- Helper function to install missing packages ---
+install_if_missing <- function(pkgs, bioconductor = FALSE) {
+  missing_pkgs <- pkgs[!pkgs %in% installed.packages()[, "Package"]]
+  if (length(missing_pkgs) > 0) {
+    message("\nInstalling missing ", if (bioconductor) "Bioconductor" else "CRAN", " packages...")
+    if (bioconductor) {
+      BiocManager::install(missing_pkgs, ask = FALSE, quiet = TRUE)
+    } else {
+      install.packages(missing_pkgs, dependencies = TRUE, quiet = TRUE)
+    }
+  }
+}
+
+# --- Install packages ---
+install_if_missing(cran_packages)
+install_if_missing(bioc_packages, bioconductor = TRUE)
+
+# --- Load packages quietly ---
+load_quietly <- function(pkg) {
+  suppressWarnings(suppressMessages(library(pkg, character.only = TRUE)))
+}
+
+invisible(lapply(c(cran_packages, bioc_packages), load_quietly))
+```
+
+# 2. Load the Data
+
+Below are the **lines of code** necessary to **load** the dataset into the R environment. For this practical session, we will use data from the HELIX (Human Early-Life Exposome) exposome study. The HELIX study is a collaborative project among six population-based birth cohort longitudinal studies from six European countries (France, Greece, Lithuania, Norway, Spain, and the United Kingdom).
+
+<img src="https://github.com/AugustoAnguita/ATHLETE.ExposomeAnalysis.Tutorial_draft/blob/main/figures/HELIX.png?raw=1" alt="HELIX logo" width="500"/>
+
+**Note:** The data provided in this introductory course were semi-simulated from the real data of the HELIX sub-cohort. For more details on the HELIX project and the origin of the data collected we recommend consulting the following publication: <https://bmjopen.bmj.com/content/8/9/e021311> and website: <https://www.projecthelix.eu/es>.
+
+This is the dataset we will use:
+
+-   **Exposome data (n=1301)**: [Rdata file](https://github.com/isglobal-brge/brge_data_large/blob/master/data/ExposomeDataChallenge2021/exposome_NA.RData) containing three objects:
+    -   1 object for exposures: `exposome`
+    -   1 object for covariates: `covariates`
+    -   1 object for outcomes: `phenotype`
+
+The three tables can be linked using **ID** variable. See the [codebook](https://github.com/isglobal-brge/brge_data_large/blob/master/data/ExposomeDataChallenge2021/codebook.xlsx) for variable description (variable name, domain, type of variable, transformation, ...)
+
+-   **omic data**: Exposome and omic data can be linked using **ID** variable.
+    -   [Proteome](https://github.com/isglobal-brge/brge_data_large/blob/master/data/ExposomeDataChallenge2021/proteome.Rdata): ExpressionSet called `proteome` of **1170 individuals** and **39 proteins** (log-transformed) that are annotated in the `ExpressionSet` object (use `fData(proteome)` after loading `Biobase` Bioconductor package).
+    -   [Gene expression](https://figshare.com/s/571c8cff7acf5167f343): ExpressionSet called `genexpr` (see [here](https://isglobal-brge.github.io/Master_Bioinformatics/bioconductor.html#expressionset) what an ExpressionSet is) of **1007 individuals** and **28,738 transcripts** with annotated gene symbols.
+    -   [Methylation](https://figshare.com/s/46e6a1d66ff135bb15c8): GenomicRatioSet called `methy` (see [here](https://www.rdocumentation.org/packages/minfi/versions/1.18.4/topics/GenomicRatioSet-class) what a GenomicRatioSet is) of **918 individuals** and **386,518 CpGs**
+
+The variables that are available in the metadata are:
+
+> 1.  **ID**: identification number
+> 2.  **e3_sex**: gender (male, female)
+> 3.  **age_sample_years**: age (in years)
+> 4.  **h_ethnicity_cauc**: caucasic? (yes, no)
+> 5.  **ethn_PC1**: first PCA to address population stratification
+> 6.  **ethn_PC2**: second PCA to address population stratification
+> 7.  **Cell-type estimates** (only for methylation): NK_6, Bcell_6, CD4T_6, CD8T_6, Gran_6, Mono_6
+
+##### We load the data required for the session.
+
+```{r}
+# Load an RData file (this file contains datasets + the codebook)
+load(url("https://github.com/isglobal-brge/brge_data_large/raw/master/data/ExposomeDataChallenge2021/exposome_NA.RData"))
+
+# Load biological omic layers data
+# 1. Proteome (ExpressionSet)
+load(url("https://github.com/isglobal-brge/brge_data_large/raw/master/data/ExposomeDataChallenge2021/proteome.Rdata"))
+
+# 2. Gene expression (ExpressionSet)
+url1 <- "https://figshare.com/ndownloader/files/26540969?private_link=571c8cff7acf5167f343"
+f1 <- CFILE("gene_expression.rda", mode = "wb")
+curlPerform(url = url1, writedata = f1@ref, followlocation = TRUE)
+close(f1)
+load("gene_expression.rda")
+
+# 3. Methylation (GenomicRatioSet)
+url2 <- "https://figshare.com/ndownloader/files/26540753?private_link=46e6a1d66ff135bb15c8"
+f2 <- CFILE("methylation.rda", mode = "wb")
+curlPerform(url = url2, writedata = f2@ref, followlocation = TRUE)
+close(f2)
+load("methylation.rda")
+```
+
+##### We check the data structure and dimension of dataframes
+
+```{r}
+# Check data structure
+glimpse(covariatesNA)
+```
+
+```{r}
+glimpse(phenotypeNA)
+```
+
+```{r}
+glimpse(proteome)
+```
+
+```{r}
+glimpse(methy)
+```
+
+```{r}
+glimpse(genexpr)
+```
+
+An ExpressionSet is a Bioconductor data structure that stores expression: data along with sample and feature metadata, while a GenomicRatioSet is a similar structure designed to store DNA methylation data, including methylation ratios and associated genomic annotations.
+
+# 3. Data preprocessing
+
+First, we have to prepare the data to do the subsequent analysis. Next, we will winsorize the omics data to account for outliers. Winsorization reduces the impact of extreme values by capping them at specified percentiles (1% and 99%). Finally, we will denoise each omic layer by adjusting for key covariates such as sex, age, and cohort using linear models. This step removes unwanted variation associated with these covariates while preserving the true biological signal in the data.
+
+##### Data preparation
+
+To simplify the analysis, we will use a subset of biomarkers that have been associated with the outcome [(Stratakis et al. 2025)](https://www.nature.com/articles/s41467-025-56013-7).
+
+```{r}
+
+# Download the file
+url <- "https://github.com/adriasell/Multi-omics-integration-Tutorial/raw/main/data/biomarkers.xlsx"
+download.file(url, destfile = "biomarkers.xlsx", mode = "wb")
+
+sheets <- excel_sheets("biomarkers.xlsx")
+biomarkers_data <- lapply(sheets, read_excel, path = "biomarkers.xlsx")
+names(biomarkers_data) <- sheets
+
+#Select those biomarkers
+methy <- methy[rownames(methy) %in% biomarkers_data$TS2A$`Table S2A: List of CpG sites included in the present study`, ]
+genexpr <- genexpr[rownames(genexpr) %in% biomarkers_data$TS2C$`Table S2C: List of transcript clusters included in the present study`, ]
+```
+
+We will only use participants for whom all data are available.
+
+```{r}
+#Select common ids btw dfs
+phenotypeNA$ID <- as.character(phenotypeNA$ID)
+covariatesNA$ID <- as.character(covariatesNA$ID)
+common_ids <- Reduce(intersect, list(pData(proteome)$ID, pData(methy)$ID, pData(genexpr)$ID, covariatesNA[complete.cases(covariatesNA),]$ID))
+
+proteome <- proteome[, match(common_ids, pData(proteome)$ID)]
+methy <- methy[, match(common_ids, pData(methy)$ID)]
+genexpr <- genexpr[, match(common_ids, pData(genexpr)$ID)]
+phenotypeNA <- phenotypeNA[match(common_ids, phenotypeNA$ID), ]
+covariatesNA <- covariatesNA[match(common_ids, covariatesNA$ID), ]
+```
+
+We have a final population (N) of:
+
+```{r}
+# Check final population size
+ncol(proteome)
+```
+
+```{r}
+cat("We will study a dataset combining DNA methylation data with", 
+    nrow(methy), "CpG sites,", 
+    "gene expression data with", nrow(genexpr), "transcripts, and",
+    "proteomics data with", nrow(proteome), "proteins.\n")
+
+```
+
+Let's do a descriptive study of the outcome and covariates.
+
+```{r}
+# Descriptive study of the outcome and covariates
+p1 <- ggplot(covariatesNA, aes(x = h_cohort)) +
+  geom_bar(fill = "steelblue") +
+  theme_minimal()
+
+p2 <- ggplot(covariatesNA, aes(x = e3_sex_None)) +
+  geom_bar(fill = "steelblue") +
+  theme_minimal()
+
+p3 <- ggplot(covariatesNA, aes(x = hs_child_age_None)) +
+  geom_histogram(fill = "steelblue", bins = 30, color = "black") +
+  theme_minimal()
+
+p4 <- ggplot(pData(proteome), aes(x = h_ethnicity_cauc)) +
+  geom_bar(fill = "steelblue") +
+  theme_minimal()
+
+# Arrange the three plots in one composite figure
+grid.arrange(p1, p2, p3, p4, ncol = 4)
+```
+
+```{r}
+immune_cells<- c("NK_6", "Bcell_6", "CD4T_6", "CD8T_6", "Gran_6", "Mono_6")
+
+pData(methy) %>%
+  as_tibble(rownames = "SampleID") %>%
+  pivot_longer(cols = all_of(immune_cells), names_to = "CellType", values_to = "Value") %>%
+  ggplot(aes(x = Value)) +
+  geom_histogram(bins = 30, color = "black", alpha = 0.7) +
+  facet_wrap(~CellType, scales = "free") +
+  theme_minimal()
+```
+
+```{r}
+#bmi_cat
+phenotypeNA$hs_bmi_c_cat <- factor(phenotypeNA$hs_bmi_c_cat,
+                                   levels = 1:4,
+                                   labels = c("Underweight", "Normal weight", "Overweight", "Obese"))
+
+bmi_table <- as.data.frame(table(phenotypeNA$hs_bmi_c_cat))
+bmi_table$Percent <- round(100 * bmi_table$Freq / sum(bmi_table$Freq), 1)
+colnames(bmi_table) <- c("BMI Category", "Count", "Percent (%)")
+
+knitr::kable(bmi_table, caption = "Distribution of BMI Categories")
+```
+
+```{r}
+#bmi
+ggplot(phenotypeNA, aes(x = hs_zbmi_who)) +
+  geom_histogram(binwidth = 0.25, fill = "steelblue", color = "black") +
+  theme_minimal()
+```
+
+##### Winsorization
+
+```{r}
+# Winsorization function
+process_outliers <- function(ms, offset = 0.001) {
+  
+  # Extract data based on object class
+  if (inherits(ms, "ExpressionSet")) {
+    bs <- exprs(ms)
+  } else if (inherits(ms, "GenomicRatioSet")) {
+    bs <- getBeta(ms)
+  } else {
+    stop("Input must be either ExpressionSet or GenomicRatioSet")
+  }
+  
+  # Apply Winsorization column-wise
+  bs <- apply(bs, 2, function(x) Winsorize(x))
+  
+  return(bs)
+}
+
+exprs(proteome) <- process_outliers(proteome)
+assay(methy, "Beta") <- process_outliers(methy)
+exprs(genexpr) <- process_outliers(genexpr)
+```
+
+##### Denoising
+
+We will denoise each omic layer for sex, age, cohort, ethnicity. Additionally we will denoise methylation data for immune cell values as tecnical covariate. To include factors in denoising or statistical models, they must be converted into dummy variables—numeric 0/1 indicators that represent each category.
+
+```{r}
+# Prepare covariate df
+covariatesNA <- dummy_cols(covariatesNA,
+                           select_columns = "h_cohort",
+                           remove_selected_columns = TRUE,
+                           remove_first_dummy = TRUE) #To denoise 
+
+rownames(covariatesNA) <- covariatesNA$ID
+covariates_df <- covariatesNA[c("e3_sex_None", "hs_child_age_None","h_cohort_2", "h_cohort_3", "h_cohort_4", "h_cohort_5", "h_cohort_6")]
+
+all(rownames(pData(methy))==rownames(covariates_df))
+covariates_df <- cbind(covariates_df, pData(methy)[,c(immune_cells, "h_ethnicity_cauc")])
+covariates_df$h_ethnicity_cauc <- as.factor(covariates_df$h_ethnicity_cauc)
+
+
+# Denoising functions
+denoise_omics <- function(omics_matrix, covariate_data, covariates= c("e3_sex_None", "hs_child_age_None","h_cohort_2", "h_cohort_3", "h_cohort_4", "h_cohort_5", "h_cohort_6", "h_ethnicity_cauc")) {
+  # Arguments:
+  # omics_matrix: rows = features (genes/proteins/metabolites), columns = samples
+  # covariate_data: data.frame with covariates (rows = samples)
+  #covariates: vector of covariates
+  
+  # Check sample names
+  if (!all(colnames(omics_matrix) == rownames(covariate_data))) {
+    stop("Sample names in omics matrix and covariate data must match!")
+  }
+  
+  covariate_data1 <- covariate_data[covariates]
+  # Create model matrix for covariates
+  covariate_model <- model.matrix(~ ., data = covariate_data1)
+  
+  # Fit linear model using limma
+  fit <- lmFit(omics_matrix, covariate_model)
+  
+  # Extract residuals = denoised data
+  denoised_matrix <- residuals(fit, omics_matrix)
+  
+  return(denoised_matrix)
+  }
+
+# denoise
+exprs(proteome) <- denoise_omics(exprs(proteome), covariates_df)
+assay(methy, "Beta") <- denoise_omics(getBeta(methy), covariates_df, 
+                                      c("e3_sex_None", "hs_child_age_None","h_cohort_2", "h_cohort_3", "h_cohort_4",
+                                        "h_cohort_5", "h_cohort_6", "h_ethnicity_cauc", immune_cells))
+exprs(genexpr) <- denoise_omics(exprs(genexpr), covariates_df)
+```
+
+##### Normalization
+
+The next step would typically be cross-omic normalization, but RGCCA already handles this internally.
+
+# 4. Multi-omics integration
+
+We will use RGCCA [(Tenenhaus et al., 2017)](10.1007/s11336-017-9573-x) to integrate the different omic layers. This is a multivariate method that integrates multiple omics layers by identifying components that capture shared variation across them, maximizing the correlation between components from different data blocks.
+
+We will divide the population into training (70 %) and testing (30%) sets. This separation allows us to train models on one subset of the data (the training set) and then evaluate their performance on an independent subset (the testing set). By doing so, we can assess how well the model generalizes to new, unseen data and avoid overfitting.
+
+```{r}
+set.seed(123)
+x <- sample(1:length(common_ids), size = 0.7 * length(common_ids))
+train_ids <- common_ids[x]
+test_ids <- common_ids[-x]
+
+# Prepare df
+X_train <- list("Prot" = t(exprs(proteome))[rownames(t(exprs(proteome))) %in% train_ids, ],
+                "Methyl" = t(getBeta(methy))[rownames(t(getBeta(methy))) %in% train_ids, ],
+                "Genexpr" = t(exprs(genexpr))[rownames(t(exprs(genexpr))) %in% train_ids, ],
+                "Y" = phenotypeNA[phenotypeNA$ID %in% train_ids, "hs_zbmi_who", drop = F])
+
+
+X_test <- list("Prot" = t(exprs(proteome))[rownames(t(exprs(proteome))) %in% test_ids, ],
+               "Methyl" = t(getBeta(methy))[rownames(t(getBeta(methy))) %in% test_ids, ],
+               "Genexpr" = t(exprs(genexpr))[rownames(t(exprs(genexpr))) %in% test_ids, ],
+               "Y" = phenotypeNA[phenotypeNA$ID %in% test_ids, "hs_zbmi_who", drop = F])
+
+
+X_pooled <- list("Prot" = rbind(X_train$Prot, X_test$Prot),
+                 "Methyl" = rbind(X_train$Methyl, X_test$Methyl),
+                 "Genexpr" = rbind(X_train$Genexpr, X_test$Genexpr),
+                 "Y" = rbind(X_train$Y,X_test$Y))
+```
+
+As a first step, we tuned the algorithm’s hyperparameters (sparsity and number of components) using cross-validation. The optimal hyperparameter configuration was determined by minimizing the root mean squared error (RMSE):
+
+-   Sparsity controls the number of variables contributing to each component, with higher sparsity selecting fewer variables.
+
+-   Number of components (ncomp) specifies how many latent variables are extracted per block to capture the main sources of shared variation across datasets.
+
+The connection matrix specifies which data blocks are connected and allowed to share information, defining the relationships modeled between datasets during multiblock analysis (1 indicates that the two blocks are connected; 0 indicates that the two blocks are not connected).
+
+**Example:** Imagine we have transcriptomics, methylation, and metabolomics data. Based on prior knowledge, we want our algorithm not to maximize the correlation between metabolomics and transcriptomics.
+
+```{r}
+# Connection matrix example
+C <- matrix(c(0, 1, 0,
+              1, 0, 1,
+              0, 1, 0),  nrow = 3, byrow = TRUE)
+rownames(C) <- colnames(C) <- c("transcriptomics", "methylation", "metabolomics")
+print(C)
+
+C <- 1 - diag(length(X_train))
+# fully connected, 0s on diagonal, 1s elsewhere #We create connection matrix, in our case we will maximize correlation between all omics
+```
+
+```{r}
+# Sparsity tuning
+min.sparsity <- 1 / sqrt(sapply(X_train, ncol))
+sparsity_grid <- expand.grid("Prot" = seq(0.6,1, length.out=3),
+                             "Methyl"= seq(0.1,0.3, length.out=3),
+                             "Genexpr"= seq(0.1,0.3, length.out=3),
+                             "Y"= round(min.sparsity[4]))
+```
+
+```{r}
+set.seed(1234)
+# Sparsity tuning
+cv_sgcca_sparsity <- rgcca_cv(blocks=X_train,
+                              connection = 1 - diag(4),
+                              response= 4,
+                              method="sgcca",
+                              par_value= sparsity_grid,
+                              ncomp=1,
+                              par_type="sparsity",
+                              n_cores= detectCores())
+
+plot(cv_sgcca_sparsity)
+```
+
+```{r}
+# Number of components tuning
+cv_sgcca_ncomp  <- rgcca_cv(blocks = X_train,
+                            response = 4,
+                            method = "sgcca",
+                            par_type = "ncomp",
+                            sparsity =  cv_sgcca_sparsity$best_params,
+                            par_value = expand.grid("Prot" = 1:2,  "Methyl"= 1:2, "Genexpr"=1:2, "Y"=1),
+                            n_cores = detectCores(),
+                            connection =  1 - diag(4))
+
+plot(cv_sgcca_ncomp)
+```
+
+```{r}
+cv_sgcca_ncomp$best_params[4] <- 1  #We only want 1 LC for the outcome
+```
+
+```{r}
+# Run the model
+rgcca_res <- rgcca(cv_sgcca_ncomp, ncomp = cv_sgcca_ncomp$best_params)
+bootstrap <- rgcca_bootstrap(rgcca_res,n_boot = 100, n_cores = detectCores())
+rgcca_res <- bootstrap$rgcca
+summary(rgcca_res)
+```
+
+To evaluate the performance of the algorithm we will use three metrics:
+
+-   **RMSE** (Root Mean Square Error): Measures the average magnitude of prediction errors, giving higher weight to large errors — lower values mean better accuracy.
+
+-   **R2** (Rsquared): Indicates how well the model explains the variance in the target variable — values closer to 1 mean a better fit.
+
+-   **MAE** (Mean Absolut Error): Measures the average absolute difference between predicted and actual values — lower values mean more accurate predictions.
+
+```{r}
+# Model performance evaluation
+#colnames(X_test$Prot) <- paste0("Prot_", colnames(X_test$Prot))
+#colnames(X_test$Methyl) <- paste0("Methyl_", colnames(X_test$Methyl))
+#colnames(X_test$Genexpr) <- paste0("Genexpr_", colnames(X_test$Genexpr))
+#colnames(X_test$Y) <- paste0("Y_", colnames(X_test$Y))
+
+rgcca_predict_res <- rgcca_predict(rgcca_res,blocks_test=X_test,prediction_model="lm")
+rgcca_predict_res$metric
+```
+
+We will calculate cross-validated (5-fold) R2 in test population to assess how well the biomarkers predict each omic-specific latent component (LC).
+
+```{r}
+# R2 CV
+source("https://raw.githubusercontent.com/adriasell/Multi-omics-integration-Tutorial/main/Functions/functions.R")
+r2_res <- cross_validation_single_outcome(X_test = X_test, response = 4, rgcca_res = rgcca_res)
+
+res_long_r2 <- r2_res$quality_all %>%
+  filter(grepl("^R2_", Indicator))
+
+medians_r2 <- res_long_r2 %>%
+  group_by(Indicator, group) %>%
+  summarise(md = round(median(value, na.rm = TRUE), 2), .groups = "drop")
+
+comp_names <- paste0(rep(names(rgcca_res$blocks)[-4], times = rgcca_res$call$ncomp[-4]), "_Comp", unlist(lapply(rgcca_res$call$ncomp[-4], seq)))
+
+# Change comp names
+res_long_r2$Indicator <- rep(comp_names, 50)
+medians_r2$Indicator <- comp_names
+
+# Plot
+ggplot(res_long_r2, aes(x = Indicator, y = value)) +
+  geom_boxplot() +
+  ggforce::facet_row(vars(group), scales = 'free', space = 'free') +
+  ggrepel::geom_text_repel(
+    data = medians_r2,
+    aes(x = Indicator, y = md, label = md),
+    direction = "y",
+    size = 3
+  ) +
+  xlab("Components") +
+  ylab("R² value") +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+    panel.grid.major.x = element_blank())
+```
+
+Here, we can identify the estimated effects of the main biomarkers on each identified LC, along with their 95% confidence intervals obtained via bootstrapping.
+
+```{r fig.width=15, fig.height=8}
+# Bootstrap analysis
+plot(bootstrap, comp = 1, block = 1)
+```
+
+```{r fig.width=15, fig.height=8}
+plot(bootstrap, comp = 2, block = 1)
+```
+
+```{r}
+plot(bootstrap, comp = 1, block = 2)
+```
+
+```{r}
+plot(bootstrap, comp = 1, block = 3)
+```
+
+We can extract the projections of each individual for each omic-specific latent component (LC) obtained from the RGCCA model. Each LC summarizes the main sources of variation within its corresponding omic while also capturing the shared structure and relationships with the other omics. This approach effectively reduces the dimensionality of each dataset while preserving inter-omic correlations. The resulting LCs can then be used, for example, to explore their associations with the outcome of interest or to identify exposures related to these components, potentially revealing underlying biological pathways.
+
+```{r}
+# Extract latent variables
+#colnames(X_pooled$Prot) <- paste0("Prot_", colnames(X_pooled$Prot))
+#colnames(X_pooled$Methyl) <- paste0("Methyl_", colnames(X_pooled$Methyl))
+#colnames(X_pooled$Genexpr) <- paste0("Genexpr_", colnames(X_pooled$Genexpr))
+#colnames(X_pooled$Y) <- paste0("Y_", colnames(X_pooled$Y))
+
+rgcca_predict_all <- rgcca_predict(rgcca_res, blocks_test=X_pooled, prediction_model="lm")
+latent_variables <- rgcca_predict_all$projection %>% purrr::reduce(cbind)%>% as.data.frame()
+latent_variables <- latent_variables[phenotypeNA$ID,]
+
+colnames(latent_variables) <- c(paste0(rep(names(rgcca_res$blocks)[-4],times = rgcca_res$call$ncomp[-4])))
+colnames(latent_variables) <- paste0(colnames(latent_variables),unlist(lapply(rgcca_res$call$ncomp[-4],seq)))
+cor(latent_variables) %>% round(2)
+```
+
+##### Sankey plot
+
+A Sankey diagram is a flow chart in which the widths of the links represent the strength of the relationship between lipid clusters (LCs) and BMI, while the colors indicate the direction of the effect: red for LCs that increase BMI and green for LCs that decrease BMI.
+
+To construct this diagram, we first perform a linear regression for each omics signature against the outcome.
+
+```{r}
+# Linear regression for Sankey diagram
+results <- data.frame(
+  variable = colnames(latent_variables),
+  estimate = NA,
+  std_error = NA,
+  t_value = NA,
+  p_value = NA)
+
+
+# Loop through each column in latent_variables
+for (i in seq_along(latent_variables)) {
+  
+  comp <- colnames(latent_variables)[i]
+  # Build formula dynamically
+  formula <- as.formula(paste("hs_zbmi_who ~ ", comp))
+  # Run linear regression
+  fit <- lm(formula, data = cbind(phenotypeNA, latent_variables))
+  # Extract coefficients
+  coef_summary <- summary(fit)$coefficients
+  # Store estimate, std error, t-value, and p-value of the predictor
+  results$estimate[i] <- coef_summary[comp, "Estimate"]
+  results$std_error[i] <- coef_summary[comp, "Std. Error"]
+  results$t_value[i] <- coef_summary[comp, "t value"]
+  results$p_value[i] <- coef_summary[comp, "Pr(>|t|)"]}
+
+#Adjust p-value
+results$p_value_adj <- p.adjust(results$p_value, method = "BH")
+
+# Create links and nodes
+results <- results %>% mutate(Outcome = "zBMI")
+
+links <- data.frame(
+  source = results$variable,
+  target = results$Outcome,
+  value = abs(results$estimate),
+  sign  = ifelse(results$estimate > 0, "Positive", "Negative"))
+
+nodes <- data.frame(name = unique(c(links$source, links$target)))
+links$IDsource <- match(links$source, nodes$name) - 1
+links$IDtarget <- match(links$target, nodes$name) - 1
+
+# Define link colors
+links$color <- ifelse(links$sign == "Positive", "red", "green")
+
+# Sankey plot
+p <- sankeyNetwork(
+  Links = links,
+  Nodes = nodes,
+  Source = "IDsource",
+  Target = "IDtarget",
+  Value = "value",
+  NodeID = "name",
+  LinkGroup = "sign",
+  colourScale = JS("d3.scaleOrdinal().domain(['Positive','Negative']).range(['red','green'])"),
+  fontSize = 13,
+  nodeWidth = 30)
+
+# Force all nodes to grey using JavaScript after rendering
+p <- htmlwidgets::onRender(p, "
+  function(el, x) {
+    d3.select(el).selectAll('.node rect')
+      .style('fill', 'grey')
+      .style('stroke', 'grey');
+  }")
+
+p
+```
+
+```{r}
+results
+```
+
+# 5. Functional enrichment analysis
+
+### Methylation
+
+Once we have obtained a list with the CpGs that are significant in our analysis, we need to locate them in the genome and try to know which structures surround them. The annotation consists in obtaining this information:
+
+First we load the annotation from IlluminaHumanMethylation450kanno.ilmn12.hg19 R package and select the columns of interest:
+
+```{r}
+methy@annotation
+```
+
+```{r}
+data("IlluminaHumanMethylation450kanno.ilmn12.hg19")
+annotation.table<- getAnnotation("IlluminaHumanMethylation450kanno.ilmn12.hg19")
+annotation.table<-as.data.frame(annotation.table[,c("chr","pos","strand",
+                                                    "Name","Islands_Name",
+                                                    "Relation_to_Island",
+                                                    "UCSC_RefGene_Name",
+                                                    "UCSC_RefGene_Group")])
+cpg_anno <- annotation.table[rownames(annotation.table) %in% rownames(rgcca_res$a$Met),]
+
+ann.genes.current <- cpg_anno$UCSC_RefGene_Name
+ann.genes.current <- unlist(lapply(strsplit(ann.genes.current, ";"), unique))
+cpg_anno[c("UCSC_RefGene_Name")]
+```
+
+The idea is to compare the list of genes that overlap our CpGs with the list of all the human genes that are annotated in specific databases. With this, we can see if our list of genes is a random subset or no. First of all we convert Gene Symbols to Ensembl and Entrez Gene IDs to use them later
+
+```{r}
+ids <- bitr(ann.genes.current, fromType="SYMBOL", toType=c("ENSEMBL", "ENTREZID"), OrgDb="org.Hs.eg.db")
+```
+
+```{r}
+data(org.Hs.egGO)
+df = as.data.frame(org.Hs.egGO)
+go_gene_list = unique(sort(df$gene_id))
+ans.go <- enrichGO(gene = ids$ENTREZID,
+                   ont = "ALL",
+                   OrgDb ="org.Hs.eg.db",
+                   universe = go_gene_list,
+                   readable=TRUE,
+                   pvalueCutoff = 0.05)
+
+tab.go <- as.data.frame(ans.go)
+tab.go<- subset(tab.go, Count>1)
+tab.go[c(1,3,12,13)]
+```
+
+This plot shows Which GO terms are enriched and their significance/gene count.
+
+```{r}
+p1 <- barplot(ans.go, showCategory=10) +
+  theme(plot.title = element_text(size = 18))
+p1
+```
+
+This plot show GO terms relate to each other; clusters of similar biological processes.
+
+```{r}
+ans.go <- pairwise_termsim(ans.go)
+p2 <- emapplot(ans.go, cex_label_category = 0.5, showCategory = 20) +
+  theme(plot.title = element_text(size = 18))
+p2
+```
+
+This plot shows which genes contribute to enrichment; visualizing the gene-GOterm network.
+
+```{r}
+p3 <- cnetplot(ans.go, circular = FALSE, colorEdge = TRUE, showCategory = 2)
+p3
+```
+
+### Gene expression
+
+```{r}
+transcripts <- rownames(rgcca_res$a$Genexpr)
+genexpr_df <- genexpr@featureData@data[genexpr@featureData@data$transcript_cluster_id %in% transcripts,]
+ann.genes.current <- genexpr_df$GeneSymbolDB
+ann.genes.current <- unlist(lapply(strsplit(ann.genes.current, ";"), unique))
+ids <- bitr(ann.genes.current, fromType="SYMBOL", toType=c("ENSEMBL", "ENTREZID"), OrgDb="org.Hs.eg.db")
+```
+
+```{r}
+ans.go <- enrichGO(gene = ids$ENTREZID,
+                   ont = "BP",
+                   OrgDb ="org.Hs.eg.db",
+                   universe = go_gene_list,
+                   readable=TRUE,
+                   pvalueCutoff = 0.05)
+
+tab.go <- as.data.frame(ans.go)
+tab.go<- subset(tab.go, Count>1)
+
+tab.go[c(2,11,12)]
+```
+
+This plot shows Which GO terms are enriched and their significance/gene count.
+
+```{r}
+p1 <- barplot(ans.go, showCategory=10) +
+  theme(plot.title = element_text(size = 18))
+p1
+```
+
+This plot show GO terms relate to each other; clusters of similar biological processes.
+
+```{r}
+ans.go <- pairwise_termsim(ans.go)
+p2 <- emapplot(ans.go, cex_label_category = 0.5, showCategory = 20) +
+  theme(plot.title = element_text(size = 18))
+p2
+```
+
+This plot shows which genes contribute to enrichment; visualizing the gene-GOterm network.
+
+```{r}
+p3 <- cnetplot(ans.go, circular = FALSE, colorEdge = TRUE, showCategory = 2)
+p3
+```
+
+# 6. Conclusions
+
+-   Four distinct molecular signatures were identified: (1) low pro-inflammatory protein levels signature (Prot1-LC), (2) low pro-inflammatory signature (Prot2-LC), (3) Methyl-LC) (4) Genexpr-LC.
+-   Prot1-LC, Prot2-LC, and Methyl-LC are inversely associated with BMI, while Genexpr-LC is positively associated with BMI.
+-   The protein components account for most of the explained variance, while methylation and gene expression components contribute only marginally. Nonetheless, within these latter layers, detectable associations may still point to biologically relevant underlying mechanisms.
+-   Enrichment analysis and functional annotation of BMI-associated molecular signatures reveal complementary insights. The methylation signature highlights the involvement of SKI, AXIN1, and DTX1 in regulating cellular signaling and protein degradation through interactions with nuclear bodies and ubiquitin-related proteins, pointing to key mechanisms of transcriptional control and TGF-β signaling pathways. Meanwhile, the gene expression signature implicates OASL, LDLR, and PLEKHA1 in viral-related processes, steroid metabolism, and activation of immune response signaling pathways, suggesting coordinated regulation of antiviral defense and metabolic processes linked to BMI.
