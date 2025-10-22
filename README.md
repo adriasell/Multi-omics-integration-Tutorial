@@ -1,4 +1,4 @@
-# Multi-omics integration tutorial
+# Multi-omics integration practicum
 
 **Adrià Setó Llorens**, Predoctoral Researcher at the Barcelona Institute for Global Health (ISGlobal).
 
